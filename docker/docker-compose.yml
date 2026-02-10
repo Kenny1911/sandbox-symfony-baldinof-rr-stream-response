@@ -1,0 +1,41 @@
+x-app-common: &app-common
+    build:
+        context: ./../
+        dockerfile: Dockerfile
+    restart: always
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+        - ./../:/var/www/html
+    tmpfs:
+        - /.composer:mode=1777
+        - /.config:mode=1777
+
+services:
+    nginx:
+        image: nginx:1.29.4-alpine
+        restart: always
+        depends_on:
+            - app
+        ports:
+            - "${APP_PORT:-127.0.0.1:8000}:80"
+        volumes:
+            - ./../:/var/www/html/:ro
+            - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+    app:
+        <<: *app-common
+
+    app-rr:
+        <<: *app-common
+        ports:
+            - "${APP_RR_PORT:-127.0.0.1:8001}:8001"
+        command:
+            - bin/rr
+            - serve
+            - --config
+            - .rr.yaml
+
+    buggregator:
+        image: ghcr.io/buggregator/server:1.12.1
+        ports:
+            - "${BUGGREGATOR_PORT:-127.0.0.1:8002}:8000"
