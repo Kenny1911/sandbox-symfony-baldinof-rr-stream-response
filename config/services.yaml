@@ -13,3 +13,14 @@ services:
         arguments:
             - '%kernel.cache_dir%'
         autoconfigure: true
+
+    App\Baldinof\RoadRunnerBundle\HttpFoundationWorker:
+        arguments:
+            - '@Spiral\RoadRunner\Http\HttpWorkerInterface'
+
+    App\Baldinof\RoadRunnerBundle\UseFixedHttpFoundationWorker:
+        decorates: Baldinof\RoadRunnerBundle\RoadRunnerBridge\HttpFoundationWorkerInterface
+        arguments:
+            - '@.inner'
+            - '@App\Baldinof\RoadRunnerBundle\HttpFoundationWorker'
+            - '%env(bool:USE_FIXED_BALDINOF_RR)%'
