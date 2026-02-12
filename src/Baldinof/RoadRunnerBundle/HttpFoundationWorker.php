@@ -19,7 +19,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class HttpFoundationWorker implements HttpFoundationWorkerInterface
 {
-    private const int CHUNK_SIZE = 4096;
+//    private const int CHUNK_SIZE = 1024 * 256; // 256Kb
+    private const int CHUNK_SIZE = 1024 * 512; // 512Kb
+//    private const int CHUNK_SIZE = 1024 * 1024 * 1; // 1Mb
+//    private const int CHUNK_SIZE = 1024 * 1024 * 10; // 10Mb
 
     private HttpWorkerInterface $httpWorker;
     private array $originalServer;
@@ -43,6 +46,71 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
 
     public function respond(SymfonyResponse $symfonyResponse): void
     {
+        // todo check raw rr respond
+        $items = function() {
+            for ($i = 0; $i < 10_000_000; ++$i) {
+                yield new readonly class($i + 1) {
+                    public string $title;
+                    public string $description;
+                    public bool $enabled;
+
+                    public function __construct(public int $id)
+                    {
+                        $this->title = 'Title';
+                        $this->description = 'Description';
+                        $this->enabled = true;
+                    }
+                };
+            }
+        };
+
+        $stringItems = function() use ($items) {
+            foreach ($items() as $item) {
+                yield \sprintf(
+                    'id: %s; title: %s; description: %s; enabled: %s'.PHP_EOL,
+                    $item->id,
+                    $item->title,
+                    $item->description,
+                    $item->enabled ? 'true' : 'false',
+                );
+            }
+        };
+
+        $chunkedStringItems = function(\Generator $items): \Generator {
+            $chunk = '';
+            $chunkSize = 1024 * 1024 * 10; // 1 Mb
+//            $chunkSize = 1024 * 1024 * 10; // 10 Mb
+
+            foreach ($items as $item) {
+                $chunk .= $item;
+
+                if (strlen($chunk) > $chunkSize) {
+                    yield $chunk;
+                    $chunk = '';
+                }
+            }
+
+            if ('' !== $chunk) {
+                yield $chunk;
+            }
+        };
+
+        // Chunked Respond generator
+        //$this->httpWorker->respond(200, $chunkedStringItems($stringItems()));
+
+        // Respond generator
+//        $this->httpWorker->respond(200, $stringItems());
+
+        // Foreach generator
+        /*foreach ($stringItems() as $item) {
+            $this->httpWorker->respond(200, $item, endOfStream: false);
+        }
+
+        $this->httpWorker->respond(200, '', endOfStream: true);*/
+
+        //return; // break original call
+
+
         if ($symfonyResponse instanceof StreamedResponse || $symfonyResponse instanceof BinaryFileResponse) {
             $this->respondStreamed($symfonyResponse);
         } else {
@@ -60,7 +128,8 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
     private function respondStreamed(StreamedResponse|BinaryFileResponse $symfonyResponse): void
     {
         $isFirst = true;
-        ob_start(function ($buffer) use ($symfonyResponse, &$isFirst) {
+        $content = '';
+        ob_start(function ($buffer) use ($symfonyResponse, &$isFirst, &$content) {
             if ($isFirst) {
                 $headers = $this->stringifyHeaders($symfonyResponse->headers->all());
                 $isFirst = false;
@@ -68,12 +137,24 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
                 $headers = [];
             }
 
-            $this->httpWorker->respond($symfonyResponse->getStatusCode(), $buffer, $headers, endOfStream: false);
+            $content .= $buffer;
+
+            if (strlen($content) >= self::CHUNK_SIZE) {
+                $this->httpWorker->respond($symfonyResponse->getStatusCode(), $content, $headers, endOfStream: false);
+                $content = '';
+            }
 
             return '';
-        }, self::CHUNK_SIZE);
+        });
         $symfonyResponse->sendContent();
         ob_end_clean();
+
+        $this->httpWorker->respond(
+            $symfonyResponse->getStatusCode(),
+            $content,
+            $isFirst ? $this->stringifyHeaders($symfonyResponse->headers->all()) : [],
+            endOfStream: true,
+        );
     }
 
     private function toSymfonyRequest(RoadRunnerRequest $rrRequest): SymfonyRequest
