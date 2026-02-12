@@ -8,6 +8,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedJsonResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use App\Symfony\HttpFoundation\StreamedResponse as ChunkedStreamedResponse;
+use App\Symfony\HttpFoundation\StreamedJsonResponse as ChunkedStreamedJsonResponse;
 
 final readonly class Controller
 {
@@ -19,6 +21,12 @@ final readonly class Controller
     public function streamedResponse(): StreamedResponse
     {
         return new StreamedResponse($this->getItemsString());
+    }
+
+    #[Route(path: '/chunked')]
+    public function chunkedStreamedResponse(): ChunkedStreamedResponse
+    {
+        return new ChunkedStreamedResponse($this->getItemsString());
     }
 
     #[Route(path: '/echo')]
@@ -33,10 +41,28 @@ final readonly class Controller
         });
     }
 
+    #[Route(path: '/echo/chunked')]
+    public function chunkedStreamedResponseUsedEcho(): ChunkedStreamedResponse
+    {
+        return new ChunkedStreamedResponse(function(): void {
+            foreach ($this->getItemsString() as $item) {
+                echo $item;
+                @ob_flush();
+                flush();
+            }
+        });
+    }
+
     #[Route(path: '/json')]
     public function streamedJsonResponse(): StreamedJsonResponse
     {
         return new StreamedJsonResponse($this->getItems());
+    }
+
+    #[Route(path: '/json/chunked')]
+    public function chunkedStreamedJsonResponse(): ChunkedStreamedJsonResponse
+    {
+        return new ChunkedStreamedJsonResponse($this->getItems());
     }
 
     #[Route(path: '/file')]
