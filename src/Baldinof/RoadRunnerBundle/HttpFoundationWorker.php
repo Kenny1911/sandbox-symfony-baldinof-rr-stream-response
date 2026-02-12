@@ -78,7 +78,7 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
             }
 
             return '';
-        });
+        }, self::STREAMED_CHUNK_SIZE);
         $symfonyResponse->sendContent();
         ob_end_clean();
 
