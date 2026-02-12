@@ -74,6 +74,8 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
         }, self::CHUNK_SIZE);
         $symfonyResponse->sendContent();
         ob_end_clean();
+
+        $this->httpWorker->respond($symfonyResponse->getStatusCode(), '', endOfStream: true);
     }
 
     private function toSymfonyRequest(RoadRunnerRequest $rrRequest): SymfonyRequest
