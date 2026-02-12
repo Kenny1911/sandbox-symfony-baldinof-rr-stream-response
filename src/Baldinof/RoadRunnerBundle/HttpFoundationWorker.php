@@ -57,28 +57,16 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
 
     private function respondStreamed(StreamedResponse|BinaryFileResponse $symfonyResponse): void
     {
-        $isFirst = true;
+        ob_start(function (string $buffer, int $phase) use ($symfonyResponse) {
+            $headers = ($phase & PHP_OUTPUT_HANDLER_START) ? $this->stringifyHeaders($symfonyResponse->headers->all()) : [];
+            $endOfStream = ($phase & PHP_OUTPUT_HANDLER_END) === PHP_OUTPUT_HANDLER_END;
 
-        ob_start(function (string $buffer) use ($symfonyResponse, &$isFirst) {
-            if ($isFirst) {
-                $headers = $this->stringifyHeaders($symfonyResponse->headers->all());
-                $isFirst = false;
-            } else {
-                $headers = [];
-            }
-
-            $this->httpWorker->respond($symfonyResponse->getStatusCode(), $buffer, $headers, endOfStream: false);
+            $this->httpWorker->respond($symfonyResponse->getStatusCode(), $buffer, $headers, endOfStream: $endOfStream);
 
             return '';
         }, 1);
         $symfonyResponse->sendContent();
         @ob_end_clean();
-
-        $this->httpWorker->respond(
-            $symfonyResponse->getStatusCode(),
-            '',
-            endOfStream: true,
-        );
     }
 
     private function toSymfonyRequest(RoadRunnerRequest $rrRequest): SymfonyRequest
