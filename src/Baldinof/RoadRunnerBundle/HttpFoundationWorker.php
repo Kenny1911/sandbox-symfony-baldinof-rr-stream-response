@@ -19,8 +19,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class HttpFoundationWorker implements HttpFoundationWorkerInterface
 {
-    private const int STREAMED_CHUNK_SIZE = 1024 * 512; // 512Kb
-
     private HttpWorkerInterface $httpWorker;
     private array $originalServer;
 
@@ -60,9 +58,8 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
     private function respondStreamed(StreamedResponse|BinaryFileResponse $symfonyResponse): void
     {
         $isFirst = true;
-        $content = '';
 
-        ob_start(function ($buffer) use ($symfonyResponse, &$isFirst, &$content) {
+        ob_start(function (string $buffer) use ($symfonyResponse, &$isFirst) {
             if ($isFirst) {
                 $headers = $this->stringifyHeaders($symfonyResponse->headers->all());
                 $isFirst = false;
@@ -70,22 +67,16 @@ final class HttpFoundationWorker implements HttpFoundationWorkerInterface
                 $headers = [];
             }
 
-            $content .= $buffer;
-
-            if (strlen($content) >= self::STREAMED_CHUNK_SIZE) {
-                $this->httpWorker->respond($symfonyResponse->getStatusCode(), $content, $headers, endOfStream: false);
-                $content = '';
-            }
+            $this->httpWorker->respond($symfonyResponse->getStatusCode(), $buffer, $headers, endOfStream: false);
 
             return '';
-        }, self::STREAMED_CHUNK_SIZE);
+        }, 1);
         $symfonyResponse->sendContent();
-        ob_end_clean();
+        @ob_end_clean();
 
         $this->httpWorker->respond(
             $symfonyResponse->getStatusCode(),
-            $content,
-            $isFirst ? $this->stringifyHeaders($symfonyResponse->headers->all()) : [],
+            '',
             endOfStream: true,
         );
     }
