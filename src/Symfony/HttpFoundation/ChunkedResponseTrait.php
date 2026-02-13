@@ -6,7 +6,7 @@ namespace App\Symfony\HttpFoundation;
 
 trait ChunkedResponseTrait
 {
-    protected const int DEFAULT_CHUNK_SIZE = 1024 * 16; // 4Kb
+    protected const int DEFAULT_CHUNK_SIZE = 1024 * 16; // 16Kb
 
     protected int $chunkSize = self::DEFAULT_CHUNK_SIZE;
 
@@ -27,9 +27,10 @@ trait ChunkedResponseTrait
         ob_start(function (string $buffer, int $phase) use (&$content) {
             $content .= $buffer;
 
-            while (strlen($content) > $this->chunkSize) {
-                $chunk = substr($content, 0, $this->chunkSize);
-                $content = substr($content, $this->chunkSize);
+            if (strlen($content) >= $this->chunkSize) {
+                $chunk = $content;
+                $content = '';
+
                 return $chunk;
             }
 
